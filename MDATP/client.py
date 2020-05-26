@@ -2,12 +2,13 @@ import json
 import urllib.request
 import urllib.parse
 import http
+import http.cookiejar
 from .Exception import APIException
 from .Utils import get_arguments
 
 
 class Client(object):
-    _headers: dict = dict()
+    __header: dict = dict()
     _host: str = 'https://api.securitycenter.windows.com'
 
     def __init__(
@@ -15,10 +16,17 @@ class Client(object):
         clientSecret: str = None, client: object = None
     ) -> object:
         if client is not None:
-            self._headers = client._headers
+            self.__client = client.__client
+            self.__header = client.__header
+            self.__cookie = client.__cookie
         else:
+            self.__cookie = http.cookiejar.CookieJar()
+            self.__client = urllib.request.build_opener(
+                urllib.request.HTTPCookieProcessor(self.__cookie)
+            )
+            urllib.request.install_opener(self.__client)
             token = self.__createAuth(tenantId, clientId, clientSecret)
-            self._headers = {
+            self.__header = {
                 'Content-Type': "application/json",
                 'Accept': 'application/json',
                 "Authorization": "Bearer {}".format(token)
@@ -38,7 +46,8 @@ class Client(object):
         data = urllib.parse.urlencode(body).encode("utf-8")
         req = urllib.request.Request(url, data)
         try:
-            with urllib.request.urlopen(req) as res:
+            with self.__client.open(req) as res:
+#            with urllib.request.urlopen(req) as res:
                 body = json.loads(res.read())
                 token = body["access_token"]
                 return token
@@ -58,7 +67,7 @@ class Client(object):
 
         args = {
             "url": url,
-            "headers": self._headers
+            "headers": self.__header
         }
         if method is not None:
             args["method"] = method.upper()
@@ -68,7 +77,8 @@ class Client(object):
             args["data"] = payload
         req = urllib.request.Request(**args)
         try:
-            with urllib.request.urlopen(req) as res:
+            with self.__client.open(req) as res:
+#            with urllib.request.urlopen(req) as res:
                 body = res.read().decode("utf-8")
                 if body is "" or body is None:
                     return {}
